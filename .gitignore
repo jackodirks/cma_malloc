@@ -25,3 +25,4 @@
 *.symtypes
 *.symvers
 *.order
+*.libmalloc.so
