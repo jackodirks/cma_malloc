@@ -11,6 +11,15 @@
 
 #include "../cma_malloc.h"          // Contains module specific information like magic number
 
+/**
+ * YOU DO NOT WANT TO USE CMA LIKE THIS
+ *
+ * There is no good reason to have physically continious memory unless a different device is involved.
+ * If a different device is involved, you want to write a driver.
+ *
+ * This code is a nice exercise and can be used while developing hardware. Try not to use it in production.
+ */
+
 static DEFINE_MUTEX(cma_lock);
 static dma_addr_t dma_handle;
 static struct device* dma_dev;
@@ -96,7 +105,7 @@ static int __init cma_malloc_init(void){
         printk("Misc register failed: %d\n", ret);
     } else {
         dma_dev = cma_malloc_miscdevice.this_device;
-        dma_dev->coherent_dma_mask = DMA_BIT_MASK(64);
+        dma_dev->coherent_dma_mask = DMA_BIT_MASK(32);
         dma_dev->dma_mask = &dma_dev->coherent_dma_mask;
     }
     return ret;
