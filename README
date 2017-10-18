@@ -1,0 +1,7 @@
+This is a simple kernel module and a library to allocate continuous memory from the Linux kernel.
+Make sure your kernel is compiled with CMA and DMA enabled. To use this module, the CMA memory needs to be in the address space addressable with 32 bits.
+On AMD64 systems, this might not be done per default. Use the following kernel parameter to fix this:
+
+cma=256M@0G-4G
+
+256 means 256 MiB can can, offcourse, be changed to something else.
