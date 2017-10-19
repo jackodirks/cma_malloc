@@ -42,7 +42,6 @@ static long allocate(struct cma_space_request_struct* req){
         size = req->size;
         req->real_addr = dma_handle;
         req->kern_addr = (u64)virt_addr;
-        req->user_addr = (u64)virt_addr;
         retval = 0;
     }
     mutex_unlock(&cma_lock);

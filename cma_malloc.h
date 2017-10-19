@@ -1,5 +1,6 @@
 #ifndef __KERNEL__
-#include <stdint.h>
+#include <stdint.h>     // uintptr_t
+#include <stdlib.h>     // size_t
 #endif //__KERNEL__
 
 
@@ -11,7 +12,6 @@ struct cma_space_request_struct {
     size_t size;                /* Size in bytes */
     uintptr_t real_addr;        /* The physical address */
     uintptr_t kern_addr;        /* The virtual address in kernel space */
-    uintptr_t user_addr;        /* The virtual address in user space */
 };
 
 #define CMA_MALLOC_ALLOC _IOWR(CMA_MALLOC_MAGIC, 0x1, struct cma_space_request_struct)
