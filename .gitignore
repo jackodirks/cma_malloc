@@ -26,3 +26,4 @@
 *.symvers
 *.order
 *.libmalloc.so
+.*.swp
