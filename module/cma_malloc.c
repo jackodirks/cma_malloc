@@ -8,6 +8,7 @@
 #include <linux/uaccess.h>          // copy_from_user and copy_to_user
 #include <linux/dma-mapping.h>      // dma_alloc_*, dma_free
 #include <asm/uaccess.h>            // access_ok
+#include <linux/list.h>             // The linked list
 
 #include "../cma_malloc.h"          // Contains module specific information like magic number
 
@@ -21,25 +22,35 @@
  */
 
 static DEFINE_MUTEX(cma_lock);
-static dma_addr_t dma_handle;
 static struct device* dma_dev;
-static size_t size;
-static void* cpu_addr;
 
+struct Allocation {
+    dma_addr_t dma_handle;
+    size_t size;
+    void* virt_addr;
+    struct list_head list;
+};
+
+LIST_HEAD(allocationList);
 
 // CMA_space should be valid on call
 static long allocate(struct cma_space_request_struct* req){
     long retval;
     void* virt_addr;
-    if ((void*)dma_handle != NULL) return ENOMEM;
+    dma_addr_t dma_handle;
     mutex_lock_interruptible(&cma_lock);
     printk("Requested amount of memory: %zu\n", req->size);
     virt_addr = dma_alloc_coherent(dma_dev, req->size, &dma_handle, GFP_USER);
     if (virt_addr == NULL){
         retval = ENOMEM;
     } else {
-        cpu_addr = virt_addr;
-        size = req->size;
+        // Handle the new linked list item
+        struct Allocation* alloc = kmalloc(sizeof(struct Allocation), GFP_KERNEL);
+        alloc->dma_handle = dma_handle;
+        alloc->size = req->size;
+        alloc->virt_addr = virt_addr;
+        INIT_LIST_HEAD(&alloc->list);
+        list_add(&alloc->list, &allocationList);
         req->real_addr = dma_handle;
         req->kern_addr = (u64)virt_addr;
         retval = 0;
@@ -50,10 +61,20 @@ static long allocate(struct cma_space_request_struct* req){
 
 static long deallocate(struct cma_space_request_struct* req){
     long retval = 0;
+    struct Allocation* alloc = NULL;
+    struct Allocation* item = NULL;
     mutex_lock_interruptible(&cma_lock);
-    if (dma_handle == req->real_addr){
-        dma_free_coherent(dma_dev, size, cpu_addr, dma_handle);
-        dma_handle = 0;
+    // Find the correct item in the list
+    list_for_each_entry(alloc, &allocationList, list){
+        if (alloc->dma_handle == req->real_addr){
+            item = alloc;
+            break;
+        }
+    }
+    if (item != NULL){
+        dma_free_coherent(dma_dev, item->size, item->virt_addr, item->dma_handle);
+        list_del(&item->list);
+        kfree(item);
         retval = 0;
     } else {
         retval = EINVAL;
