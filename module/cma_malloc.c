@@ -1,9 +1,9 @@
 // Linux headers
 #include <linux/fs.h>               // Because this is a character device
 #include <linux/miscdevice.h>       // For the MISC_DYNAMIC_MINOR macro and the miscdevice struct
-#include <linux/stat.h>             // Has permission macro's
+#include <linux/stat.h>             // Has permission macros
 #include <linux/module.h>           // Contains the THIS_MODULE macro
-#include <linux/mutex.h>            // Declares the spinlock
+#include <linux/mutex.h>            // Declares the mutex
 #include <linux/slab.h>             // Kmalloc/kfree
 #include <linux/uaccess.h>          // copy_from_user and copy_to_user
 #include <linux/dma-mapping.h>      // dma_alloc_*, dma_free
@@ -21,9 +21,6 @@
  * This code is a nice exercise and can be used while developing hardware. Try not to use it in production.
  */
 
-static DEFINE_MUTEX(cma_lock);
-static struct device* dma_dev;
-
 struct Allocation {
     dma_addr_t dma_handle;
     size_t size;
@@ -31,15 +28,14 @@ struct Allocation {
     struct list_head list;
     struct task_struct* caller;
 };
+static DEFINE_MUTEX(allocationListLock);      // allocationListLock protects allocationList and all of its items.
+static struct device* dma_dev;
+static LIST_HEAD(allocationList);
 
-LIST_HEAD(allocationList);
-
-// CMA_space should be valid on call
 static long allocate(struct cma_space_request_struct* req){
     long retval;
     void* virt_addr;
     dma_addr_t dma_handle;
-    mutex_lock_interruptible(&cma_lock);
     virt_addr = dma_alloc_coherent(dma_dev, req->size, &dma_handle, GFP_USER);
     if (virt_addr == NULL){
         retval = ENOMEM;
@@ -51,12 +47,13 @@ static long allocate(struct cma_space_request_struct* req){
         alloc->virt_addr = virt_addr;
         alloc->caller = current;
         INIT_LIST_HEAD(&alloc->list);
+        mutex_lock_interruptible(&allocationListLock);
         list_add(&alloc->list, &allocationList);
+        mutex_unlock(&allocationListLock);
         req->real_addr = dma_handle;
-        req->kern_addr = (u64)virt_addr;
+        req->kern_addr = (uintptr_t)virt_addr;
         retval = 0;
     }
-    mutex_unlock(&cma_lock);
     return retval;
 }
 
@@ -64,7 +61,7 @@ static long deallocate(struct cma_space_request_struct* req){
     long retval = 0;
     struct Allocation* alloc = NULL;
     struct Allocation* item = NULL;
-    mutex_lock_interruptible(&cma_lock);
+    mutex_lock_interruptible(&allocationListLock);
     // Find the correct item in the list
     list_for_each_entry(alloc, &allocationList, list){
         if (alloc->dma_handle == req->real_addr){
@@ -72,15 +69,15 @@ static long deallocate(struct cma_space_request_struct* req){
             break;
         }
     }
+    if (item != NULL && item->caller == current)list_del(&item->list);
+    mutex_unlock(&allocationListLock);
     if (item != NULL && item->caller == current){
         dma_free_coherent(dma_dev, item->size, item->virt_addr, item->dma_handle);
-        list_del(&item->list);
         kfree(item);
         retval = 0;
     } else {
         retval = EINVAL;
     }
-    mutex_unlock(&cma_lock);
     return retval;
 }
 
@@ -99,7 +96,6 @@ static long cma_malloc_ioctl(struct file* fptr, const unsigned int cmd, const un
             return retval;
         case CMA_MALLOC_FREE:
             return -1*deallocate(&req);
-            return 0;
         default:
             return -EINVAL;
             break;
