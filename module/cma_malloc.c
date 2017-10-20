@@ -29,6 +29,7 @@ struct Allocation {
     size_t size;
     void* virt_addr;
     struct list_head list;
+    struct task_struct* caller;
 };
 
 LIST_HEAD(allocationList);
@@ -49,6 +50,7 @@ static long allocate(struct cma_space_request_struct* req){
         alloc->dma_handle = dma_handle;
         alloc->size = req->size;
         alloc->virt_addr = virt_addr;
+        alloc->caller = current;
         INIT_LIST_HEAD(&alloc->list);
         list_add(&alloc->list, &allocationList);
         req->real_addr = dma_handle;
@@ -71,7 +73,7 @@ static long deallocate(struct cma_space_request_struct* req){
             break;
         }
     }
-    if (item != NULL){
+    if (item != NULL && item->caller == current){
         dma_free_coherent(dma_dev, item->size, item->virt_addr, item->dma_handle);
         list_del(&item->list);
         kfree(item);
