@@ -40,7 +40,6 @@ static long allocate(struct cma_space_request_struct* req){
     void* virt_addr;
     dma_addr_t dma_handle;
     mutex_lock_interruptible(&cma_lock);
-    printk("Requested amount of memory: %zu\n", req->size);
     virt_addr = dma_alloc_coherent(dma_dev, req->size, &dma_handle, GFP_USER);
     if (virt_addr == NULL){
         retval = ENOMEM;
