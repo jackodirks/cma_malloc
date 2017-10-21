@@ -24,7 +24,7 @@
 struct Allocation {
     dma_addr_t dma_handle;
     size_t size;
-    void* virt_addr;
+    void* cpu_addr;
     struct list_head list;
     struct task_struct* caller;
 };
@@ -34,25 +34,25 @@ static LIST_HEAD(allocationList);
 
 static long allocate(struct cma_space_request_struct* req){
     long retval;
-    void* virt_addr;
+    void* cpu_addr;
     dma_addr_t dma_handle;
-    virt_addr = dma_alloc_coherent(dma_dev, req->size, &dma_handle, GFP_USER);
-    if (virt_addr == NULL){
         retval = ENOMEM;
+    cpu_addr = dma_alloc_coherent(dma_dev, req->size, &dma_handle, GFP_USER);
+    if (cpu_addr == NULL){
     } else {
         // Handle the new linked list item
         struct Allocation* alloc = kmalloc(sizeof(struct Allocation), GFP_KERNEL);
         alloc->dma_handle = dma_handle;
         alloc->size = req->size;
-        alloc->virt_addr = virt_addr;
+        alloc->cpu_addr = cpu_addr;
         alloc->caller = current;
         INIT_LIST_HEAD(&alloc->list);
         mutex_lock_interruptible(&allocationListLock);
         list_add(&alloc->list, &allocationList);
         mutex_unlock(&allocationListLock);
         req->real_addr = dma_handle;
-        req->kern_addr = (uintptr_t)virt_addr;
         retval = 0;
+        req->kern_addr = (uintptr_t)cpu_addr;
     }
     return retval;
 }
@@ -72,7 +72,7 @@ static long deallocate(struct cma_space_request_struct* req){
     if (item != NULL && item->caller == current)list_del(&item->list);
     mutex_unlock(&allocationListLock);
     if (item != NULL && item->caller == current){
-        dma_free_coherent(dma_dev, item->size, item->virt_addr, item->dma_handle);
+        dma_free_coherent(dma_dev, item->size, item->cpu_addr, item->dma_handle);
         kfree(item);
         retval = 0;
     } else {
