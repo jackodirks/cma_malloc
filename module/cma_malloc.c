@@ -19,6 +19,12 @@
  * If a different device is involved, you want to write a driver.
  *
  * This code is a nice exercise and can be used while developing hardware. Try not to use it in production.
+ *
+ * The code can be made nicer with kref, mmap open and mmap close callback functions.
+ * This is omitted here because it is not worth the effort for now.
+ * This also means that resource leaking on process crash is basically a given.
+ * The file drivers/rapidio/devices/rio_mport_cdev.c gives a nice example of proper resource handling
+ * No efforts to clean up are made when this module is removed from the kernel
  */
 
 struct Allocation {
@@ -58,13 +64,13 @@ static long allocate(struct cma_space_request_struct* req){
     }
 }
 
-static long deallocate(struct cma_space_request_struct* req){
+static long deallocate(dma_addr_t phys_addr){
     struct Allocation* alloc;
     struct Allocation* item = NULL;
 
     mutex_lock_interruptible(&allocationListLock);
     list_for_each_entry(alloc, &allocationList, list){
-        if (alloc->dma_handle == req->real_addr){
+        if (alloc->dma_handle == phys_addr){
             item = alloc;
             break;
         }
@@ -95,7 +101,7 @@ static long cma_malloc_ioctl(struct file* fptr, const unsigned int cmd, const un
             }
             return retval;
         case CMA_MALLOC_FREE:
-            return -1*deallocate(&req);
+            return -1*deallocate(req.real_addr);
         default:
             return -EINVAL;
             break;
