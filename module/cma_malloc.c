@@ -33,12 +33,12 @@ static struct device* dma_dev;
 static LIST_HEAD(allocationList);
 
 static long allocate(struct cma_space_request_struct* req){
-    long retval;
     void* cpu_addr;
     dma_addr_t dma_handle;
-        retval = ENOMEM;
+    if (req->size % PAGE_SIZE != 0) return EINVAL;
     cpu_addr = dma_alloc_coherent(dma_dev, req->size, &dma_handle, GFP_USER);
     if (cpu_addr == NULL){
+        return ENOMEM;
     } else {
         // Handle the new linked list item
         struct Allocation* alloc = kmalloc(sizeof(struct Allocation), GFP_KERNEL);
@@ -51,10 +51,9 @@ static long allocate(struct cma_space_request_struct* req){
         list_add(&alloc->list, &allocationList);
         mutex_unlock(&allocationListLock);
         req->real_addr = dma_handle;
-        retval = 0;
         req->kern_addr = (uintptr_t)cpu_addr;
+        return 0;
     }
-    return retval;
 }
 
 static long deallocate(struct cma_space_request_struct* req){
