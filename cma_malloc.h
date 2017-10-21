@@ -10,7 +10,7 @@
 
 struct cma_space_request_struct {
     size_t size;                /* Size in bytes */
-    uintptr_t real_addr;        /* The physical address */
+    off_t real_addr;            /* The physical address */
     uintptr_t kern_addr;        /* The virtual address in kernel space */
 };
 
