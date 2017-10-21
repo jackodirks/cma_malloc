@@ -47,9 +47,11 @@ static long allocate(struct cma_space_request_struct* req){
         alloc->cpu_addr = cpu_addr;
         alloc->caller = current;
         INIT_LIST_HEAD(&alloc->list);
+
         mutex_lock_interruptible(&allocationListLock);
         list_add(&alloc->list, &allocationList);
         mutex_unlock(&allocationListLock);
+
         req->real_addr = dma_handle;
         req->kern_addr = (uintptr_t)cpu_addr;
         return 0;
@@ -57,11 +59,10 @@ static long allocate(struct cma_space_request_struct* req){
 }
 
 static long deallocate(struct cma_space_request_struct* req){
-    long retval = 0;
-    struct Allocation* alloc = NULL;
+    struct Allocation* alloc;
     struct Allocation* item = NULL;
+
     mutex_lock_interruptible(&allocationListLock);
-    // Find the correct item in the list
     list_for_each_entry(alloc, &allocationList, list){
         if (alloc->dma_handle == req->real_addr){
             item = alloc;
@@ -70,14 +71,14 @@ static long deallocate(struct cma_space_request_struct* req){
     }
     if (item != NULL && item->caller == current)list_del(&item->list);
     mutex_unlock(&allocationListLock);
+
     if (item != NULL && item->caller == current){
         dma_free_coherent(dma_dev, item->size, item->cpu_addr, item->dma_handle);
         kfree(item);
-        retval = 0;
+        return 0;
     } else {
-        retval = EINVAL;
+        return EINVAL;
     }
-    return retval;
 }
 
 static long cma_malloc_ioctl(struct file* fptr, const unsigned int cmd, const unsigned long arg){
@@ -135,16 +136,16 @@ static struct file_operations cma_malloc_fileops = {
 };
 
 static struct miscdevice cma_malloc_miscdevice = {
-    minor           :   MISC_DYNAMIC_MINOR,
-    name            :   CMA_MALLOC_DEVICE_FILENAME,
-    fops            :   &cma_malloc_fileops,
-    mode            :   S_IRUGO | S_IWUGO,
+    .minor           =   MISC_DYNAMIC_MINOR,
+    .name            =   CMA_MALLOC_DEVICE_FILENAME,
+    .fops            =   &cma_malloc_fileops,
+    .mode            =   S_IRUGO | S_IWUGO,
 };
 
 static int __init cma_malloc_init(void){
     int ret;
     ret = misc_register(&cma_malloc_miscdevice);
-    if (ret){
+    if (unlikely(ret)){
         printk("Misc register failed: %d\n", ret);
     } else {
         dma_dev = cma_malloc_miscdevice.this_device;
@@ -163,5 +164,5 @@ module_exit(cma_malloc_exit);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("J. A. Dirks <jacko.dirks@gmail.com>");
-MODULE_DESCRIPTION("Provides a way to pass a chunk of CMA space to userspace");
-MODULE_VERSION("0.1");
+MODULE_DESCRIPTION("Provides a way to pass a chunk of CMA space to userspace, including its physical address");
+MODULE_VERSION("1.0");
