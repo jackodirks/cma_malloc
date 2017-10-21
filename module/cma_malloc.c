@@ -102,9 +102,36 @@ static long cma_malloc_ioctl(struct file* fptr, const unsigned int cmd, const un
     return retval;
 }
 
+static int cma_malloc_mmap(struct file* fptr, struct vm_area_struct* vma){
+    int retval = ENOMEM;
+    const struct Allocation* alloc;
+    dma_addr_t dma_handle = vma->vm_pgoff << PAGE_SHIFT;
+    size_t size = vma->vm_end - vma->vm_start;
+
+    mutex_lock_interruptible(&allocationListLock);
+    list_for_each_entry(alloc, &allocationList, list){
+        if (alloc->dma_handle <= dma_handle && alloc->dma_handle + alloc->size >= dma_handle){
+            if (current != alloc->caller){
+                retval = -EINVAL;
+            } else {
+                retval = 0;
+            }
+            break;
+        }
+    }
+    mutex_unlock(&allocationListLock);
+    if (retval != 0) return retval;
+
+    dma_handle -= alloc->dma_handle;
+    if (dma_handle + size > alloc->size) return -EINVAL;
+    vma->vm_pgoff = dma_handle >> PAGE_SHIFT;
+    return dma_mmap_coherent(dma_dev, vma, alloc->cpu_addr, alloc->dma_handle, alloc->size);
+}
+
 static struct file_operations cma_malloc_fileops = {
-    owner           :   THIS_MODULE,
-    unlocked_ioctl  :   cma_malloc_ioctl
+    .owner          =   THIS_MODULE,
+    .unlocked_ioctl =   cma_malloc_ioctl,
+    .mmap           =   cma_malloc_mmap
 };
 
 static struct miscdevice cma_malloc_miscdevice = {
