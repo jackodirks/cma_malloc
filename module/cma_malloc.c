@@ -41,6 +41,7 @@ static LIST_HEAD(allocationList);
 static long allocate(struct cma_space_request_struct* req){
     void* cpu_addr;
     dma_addr_t dma_handle;
+    int retval;
     if (req->size % PAGE_SIZE != 0) return -EINVAL;
     cpu_addr = dma_alloc_coherent(dma_dev, req->size, &dma_handle, GFP_USER);
     if (cpu_addr == NULL){
@@ -54,7 +55,12 @@ static long allocate(struct cma_space_request_struct* req){
         alloc->caller = current;
         INIT_LIST_HEAD(&alloc->list);
 
-        mutex_lock_interruptible(&allocationListLock);
+        retval = mutex_lock_interruptible(&allocationListLock);
+        if (unlikely(retval != 0)){
+            kfree(alloc);
+            dma_free_coherent(dma_dev, req->size, cpu_addr, dma_handle);
+            return retval;
+        }
         list_add(&alloc->list, &allocationList);
         mutex_unlock(&allocationListLock);
 
@@ -68,7 +74,8 @@ static long deallocate(dma_addr_t phys_addr){
     struct Allocation* alloc;
     struct Allocation* item = NULL;
 
-    mutex_lock_interruptible(&allocationListLock);
+    int retval = mutex_lock_interruptible(&allocationListLock);
+    if (unlikely(retval != 0)) return retval;
     list_for_each_entry(alloc, &allocationList, list){
         if (alloc->dma_handle == phys_addr){
             item = alloc;
@@ -116,7 +123,8 @@ static int cma_malloc_mmap(struct file* fptr, struct vm_area_struct* vma){
     dma_addr_t dma_handle = vma->vm_pgoff << PAGE_SHIFT;
     size_t size = vma->vm_end - vma->vm_start;
 
-    mutex_lock_interruptible(&allocationListLock);
+    retval = mutex_lock_interruptible(&allocationListLock);
+    if (unlikely(retval != 0)) return retval;
     list_for_each_entry(alloc, &allocationList, list){
         if (alloc->dma_handle <= dma_handle && alloc->dma_handle + alloc->size >= dma_handle){
             found = 1;
