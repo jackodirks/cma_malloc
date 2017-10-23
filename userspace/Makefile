@@ -1,34 +1,55 @@
 CC?=gcc
+CP?=cp
 SRCDIR:=src/
-ODIR:=obj/
-CFILES:=$(wildcard $(SRCDIR)*.c)
-_OFILES:=$(patsubst %.c,%.o,$(CFILES))
-OFILES:= $(patsubst src/%,$(ODIR)%,$(_OFILES))
+RODIR:=obj/
+DODIR:=debugobj/
+OFILES:=$(patsubst %.c,%.o,$(wildcard $(SRCDIR)*.c))
+ROFILES:= $(patsubst $(SRCDIR)%,$(RODIR)%,$(OFILES))
+DOFILES:= $(patsubst $(SRCDIR)%,$(DODIR)%,$(OFILES))
 
-INC:= -I ../
-LDFLAGS:=
-CFLAGS:=-Wall -Werror -Wextra -std=gnu11 $(INC)
-TARGET:=final
+TARGET := libcontiguousmalloc.so
+RTARGET := $(RODIR)$(TARGET)
+DTARGET := $(DODIR)$(TARGET)
+INC:= -I ../ -I inc/
 
-.PHONY: all clean debug
+LDFLAGS:= -fPIC -shared
+RLDFLAGS:= $(LDFLAGS) -flto -s
+DLDFLAGS:= $(LDFLAGS)
 
-all: CFLAGS +=-O3 -march=native -funroll-loops
-all: LDFLAGS +=-s
-all: $(TARGET)
+CFLAGS := -MMD -MP -Wall -Werror -Wextra -Wfatal-errors -std=gnu11 -fPIC $(INC)
+RCFLAGS := $(CFLAGS) -O2 -flto
+DCFLAGS := $(CFLAGS) -DDEBUG -g3
 
-debug: CFLAGS +=-DDEBUG -g3
-debug: LDFLAGS +=
-debug: $(TARGET)
+-include $(ROFILES:%.o=%.d)
+-include $(DOFILES:%.o=%.d)
 
-$(ODIR):
-	@mkdir -p $(ODIR)
-	 
-$(ODIR)%.o: $(SRCDIR)%.c
-	$(CC) $(CFLAGS) -c $< -o $@ 
+.DEFAULT_GOAL := all
 
-$(TARGET): $(OFILES) | $(ODIR)
-	$(CC) -o $@ $^ $(LDFLAGS)	
+.PHONY: all release clean debug
+
+all: release debug
+
+release: $(TARGET)
+
+debug: $(DTARGET)
+
+$(RODIR) $(DODIR):
+	mkdir -p $@
+
+$(RODIR)%.o: $(SRCDIR)%.c
+	$(CC) $(RCFLAGS) -c $< -o $@
+
+$(RTARGET): $(ROFILES) | $(RODIR)
+	$(CC) -o $@ $^ $(RLDFLAGS)
+
+$(TARGET) : $(RTARGET)
+	$(CP) $^ $@
+
+$(DODIR)%.o: $(SRCDIR)%.c
+	$(CC) $(DCFLAGS) -c $< -o $@
+
+$(DTARGET) : $(DOFILES) | $(DODIR)
+	$(CC) -o $@ $^ $(DLDFLAGS)
 
 clean:
-	@rm -rf $(ODIR)
-	@rm $(TARGET)
+	@rm -rf $(RODIR) $(DODIR)

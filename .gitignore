@@ -27,3 +27,5 @@
 *.order
 *.libmalloc.so
 .*.swp
+debugobj/
+obj/
