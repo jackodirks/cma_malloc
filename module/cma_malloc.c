@@ -41,10 +41,10 @@ static LIST_HEAD(allocationList);
 static long allocate(struct cma_space_request_struct* req){
     void* cpu_addr;
     dma_addr_t dma_handle;
-    if (req->size % PAGE_SIZE != 0) return EINVAL;
+    if (req->size % PAGE_SIZE != 0) return -EINVAL;
     cpu_addr = dma_alloc_coherent(dma_dev, req->size, &dma_handle, GFP_USER);
     if (cpu_addr == NULL){
-        return ENOMEM;
+        return -ENOMEM;
     } else {
         // Handle the new linked list item
         struct Allocation* alloc = kmalloc(sizeof(struct Allocation), GFP_KERNEL);
@@ -83,7 +83,7 @@ static long deallocate(dma_addr_t phys_addr){
         kfree(item);
         return 0;
     } else {
-        return EINVAL;
+        return -EINVAL;
     }
 }
 
@@ -95,13 +95,13 @@ static long cma_malloc_ioctl(struct file* fptr, const unsigned int cmd, const un
     if (copy_from_user(&req, userReq, sizeof(struct cma_space_request_struct)) != 0) return -EBADE;
     switch(cmd){
         case CMA_MALLOC_ALLOC:
-            retval = -1*allocate(&req);
+            retval = allocate(&req);
             if (retval == 0){
                 if (copy_to_user(userReq, &req, sizeof(struct cma_space_request_struct)) != 0) return -EBADE;
             }
             return retval;
         case CMA_MALLOC_FREE:
-            return -1*deallocate(req.real_addr);
+            return deallocate(req.real_addr);
         default:
             return -EINVAL;
             break;
@@ -110,7 +110,8 @@ static long cma_malloc_ioctl(struct file* fptr, const unsigned int cmd, const un
 }
 
 static int cma_malloc_mmap(struct file* fptr, struct vm_area_struct* vma){
-    int retval = ENOMEM;
+    int retval;
+    int found = 0;
     const struct Allocation* alloc;
     dma_addr_t dma_handle = vma->vm_pgoff << PAGE_SHIFT;
     size_t size = vma->vm_end - vma->vm_start;
@@ -118,6 +119,7 @@ static int cma_malloc_mmap(struct file* fptr, struct vm_area_struct* vma){
     mutex_lock_interruptible(&allocationListLock);
     list_for_each_entry(alloc, &allocationList, list){
         if (alloc->dma_handle <= dma_handle && alloc->dma_handle + alloc->size >= dma_handle){
+            found = 1;
             if (current != alloc->caller){
                 retval = -EINVAL;
             } else {
@@ -127,6 +129,7 @@ static int cma_malloc_mmap(struct file* fptr, struct vm_area_struct* vma){
         }
     }
     mutex_unlock(&allocationListLock);
+    if (found == 0) return -EINVAL;
     if (retval != 0) return retval;
 
     dma_handle -= alloc->dma_handle;
