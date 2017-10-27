@@ -16,14 +16,16 @@ RTARGET := $(RODIR)$(TARGET)
 DTARGET := $(DODIR)$(TARGET)
 INC:= -I ../ -I inc/
 
-LDFLAGS:= -fPIC -shared
-RLDFLAGS:= $(LDFLAGS) -flto -s
-DLDFLAGS:= $(LDFLAGS)
+LDFLAGS := -flto
+RLDFLAGS:= $(LDFLAGS) -s -fPIC -shared
+DLDFLAGS:= -fPIC -shared
 
-CFLAGS :=  -Wall -Werror -Wextra -Wfatal-errors -std=gnu11 $(INC)
+CFLAGS := -flto
+COMMONCFLAGS := -Wall -Werror -Wextra -Wfatal-errors -std=gnu11 $(INC)
 LIBCFLAGS := -MMD -MP -fPIC
-RCFLAGS := $(CFLAGS) $(LIBCFLAGS) -O2 -flto
-DCFLAGS := $(CFLAGS) $(LIBCFLAGS) -DDEBUG -g3
+RCFLAGS := $(CFLAGS) $(LIBCFLAGS) -O2 $(COMMONCFLAGS)
+DCFLAGS := $(LIBCFLAGS) -DDEBUG -g3 $(COMMONCFLAGS)
+TCFLAGS := $(CFLAGS) $(COMMONCFLAGS)
 
 -include $(ROFILES:%.o=%.d)
 -include $(DOFILES:%.o=%.d)
@@ -32,7 +34,7 @@ DCFLAGS := $(CFLAGS) $(LIBCFLAGS) -DDEBUG -g3
 
 .PHONY: all release clean debug install testexec
 
-all: release debug testexec
+all: release testexec
 
 release: $(TARGET)
 
@@ -59,7 +61,7 @@ $(DTARGET) : $(DOFILES) | $(DODIR)
 	$(CC) -o $@ $^ $(DLDFLAGS)
 
 $(TESTEXEC) : $(TESTFILES) $(TARGET)
-	$(CC) $(CFLAGS) -L . -lcontiguousmalloc $< -o $@
+	$(CC) $(TCFLAGS) -L . -lcontiguousmalloc $< -o $@
 
 install: $(RTARGET)
 	$(INSTALL) -m 755 $< $(INSTALLLOCATION)
