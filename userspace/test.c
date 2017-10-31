@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <string.h>
 
 #include "contiguousMalloc.h"
 
@@ -12,6 +13,7 @@ int main(){
         printf("Failed to aquire memory!\n");
         exit(EXIT_FAILURE);
     }
+    memset(userspace, 1, reqSize);
     printf("Aquired %zu MiB memory!\n", (size_t)(reqSize/pow(2, 20)));
     printf("\tPhysical address: %p\n", (void*)phys_addr);
     printf("\tUserspace address: %p\n", userspace);
