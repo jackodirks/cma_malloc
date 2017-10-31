@@ -29,5 +29,5 @@
 .*.swp
 debugobj/
 obj/
-final
+test
 

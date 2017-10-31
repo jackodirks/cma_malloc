@@ -10,7 +10,7 @@ ROFILES:= $(patsubst $(SRCDIR)%,$(RODIR)%,$(OFILES))
 DOFILES:= $(patsubst $(SRCDIR)%,$(DODIR)%,$(OFILES))
 
 TARGET := libcontiguousmalloc.so
-TESTEXEC := final
+TESTEXEC := test
 TESTFILES := test.c
 RTARGET := $(RODIR)$(TARGET)
 DTARGET := $(DODIR)$(TARGET)
